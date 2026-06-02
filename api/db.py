@@ -122,58 +122,8 @@ async def load_pos_transactions():
                 print(f"[DB INIT] Error saving transactions to DB: {e}")
                 await session.rollback()
 
-async def load_sample_events():
-    events_path = "events.jsonl"
-    if not os.path.exists(events_path):
-        print(f"[DB INIT] Warning: {events_path} not found. Skipping sample events import.")
-        return
-
-    print(f"[DB INIT] Loading sample events from {events_path}...")
-    events_to_insert = []
-    
-    with open(events_path, mode='r', encoding='utf-8') as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                data = json.loads(line)
-                meta = data.get("metadata", {})
-                
-                # Convert timestamp string to datetime object
-                dt = datetime.fromisoformat(data["timestamp"].replace(" ", "T"))
-                
-                events_to_insert.append(DBEvent(
-                    event_id=data["event_id"],
-                    store_id=data["store_id"],
-                    camera_id=data["camera_id"],
-                    visitor_id=data["visitor_id"],
-                    event_type=data["event_type"],
-                    timestamp=dt,
-                    zone_id=data.get("zone_id"),
-                    dwell_ms=data.get("dwell_ms", 0),
-                    is_staff=data.get("is_staff", False),
-                    confidence=data.get("confidence", 1.0),
-                    queue_depth=meta.get("queue_depth"),
-                    sku_zone=meta.get("sku_zone"),
-                    session_seq=meta.get("session_seq")
-                ))
-            except Exception as e:
-                print(f"[DB INIT] Error parsing line in events.jsonl: {e}")
-
-    if events_to_insert:
-        async with AsyncSession(active_engine) as session:
-            try:
-                for ev in events_to_insert:
-                    await session.merge(ev)
-                await session.commit()
-                print(f"[DB INIT] Successfully loaded {len(events_to_insert)} sample events.")
-            except Exception as e:
-                print(f"[DB INIT] Error saving sample events to DB: {e}")
-                await session.rollback()
-
 async def init_db():
     await check_db_connection()
     async with active_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
     await load_pos_transactions()
-    await load_sample_events()
