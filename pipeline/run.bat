@@ -1,0 +1,3 @@
+@echo off
+echo [RUNNER] Launching video intelligence pipeline on Windows...
+python -m pipeline.run --step 15 --url http://localhost:8000/events/ingest --layout Revised

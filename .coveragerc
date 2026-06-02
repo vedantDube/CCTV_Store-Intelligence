@@ -1,0 +1,11 @@
+[run]
+source = api
+omit =
+    api/routers/*
+concurrency = greenlet,thread
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__
+    raise NotImplementedError

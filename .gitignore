@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+env/
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints
+
+# IDEs and Editors
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# Database and SQLite
+*.db
+*.db-journal
+
+# Data and Logs
+*.log
+events.jsonl
+*.csv
+*.xlsx
+
+# CCTV Footage and Large Media
+*CCTV Footage*/
+*.zip
+*.mp4
+*.avi
+
+# Large binaries and installers
+*.exe
+
+# Model weights
+models/*.pt
+
+# Temporary files
+*.tmp
+.commandcode/
+.sixth/
+scratch/
+
+

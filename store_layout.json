@@ -1,0 +1,34 @@
+{
+  "ST1008": {
+    "store_id": "ST1008",
+    "store_name": "Brigade_Bangalore",
+    "open_hours": "10:00-22:00",
+    "zones": [
+      {
+        "zone_id": "ENTRY",
+        "camera_id": "CAM 1",
+        "description": "Store entry/exit threshold"
+      },
+      {
+        "zone_id": "FOH",
+        "camera_id": "CAM 2",
+        "description": "Front of House, Fragrance and Nail Units"
+      },
+      {
+        "zone_id": "MAKEUP",
+        "camera_id": "CAM 3",
+        "description": "Central Makeup Unit and Aisle"
+      },
+      {
+        "zone_id": "SKINCARE",
+        "camera_id": "CAM 4",
+        "description": "Skincare shelves"
+      },
+      {
+        "zone_id": "BILLING",
+        "camera_id": "CAM 5",
+        "description": "Billing area and Cash Counter"
+      }
+    ]
+  }
+}
