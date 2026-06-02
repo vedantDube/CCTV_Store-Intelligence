@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function App() {
   const [storeId, setStoreId] = useState('ST1008');
   const [serverStatus, setServerStatus] = useState('checking');
@@ -56,11 +58,11 @@ function App() {
       try {
         setIsUpdating(true);
         const [healthRes, metricsRes, funnelRes, heatmapRes, anomaliesRes] = await Promise.all([
-          fetch('http://localhost:8000/health'),
-          fetch(`http://localhost:8000/stores/${storeId}/metrics`),
-          fetch(`http://localhost:8000/stores/${storeId}/funnel`),
-          fetch(`http://localhost:8000/stores/${storeId}/heatmap`),
-          fetch(`http://localhost:8000/stores/${storeId}/anomalies`)
+          fetch(`${API_BASE_URL}/health`),
+          fetch(`${API_BASE_URL}/stores/${storeId}/metrics`),
+          fetch(`${API_BASE_URL}/stores/${storeId}/funnel`),
+          fetch(`${API_BASE_URL}/stores/${storeId}/heatmap`),
+          fetch(`${API_BASE_URL}/stores/${storeId}/anomalies`)
         ]);
 
         const [hData, mData, fData, hmapData, aData] = await Promise.all([
