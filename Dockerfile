@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir numpy Cython wheel setuptools
+RUN pip install --no-cache-dir numpy scipy Cython wheel setuptools
 RUN pip install --no-cache-dir --no-build-isolation -r requirements.txt
 
 # Copy source code
