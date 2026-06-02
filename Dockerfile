@@ -16,9 +16,9 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirement file and install Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir numpy Cython wheel setuptools
+RUN pip install --no-cache-dir --no-build-isolation -r requirements.txt
 
 # Copy source code
 COPY . .
