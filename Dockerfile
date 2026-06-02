@@ -6,19 +6,17 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (opencv, git for deep-person-reid)
+# Install system dependencies (needed for opencv-python)
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    git \
     ffmpeg \
     libsm6 \
     libxext6 \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir numpy scipy Cython wheel setuptools
-RUN pip install --no-cache-dir --no-build-isolation -r requirements.txt
+# Copy requirement file and install Python deps
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir -r requirements-api.txt
 
 # Copy source code
 COPY . .
