@@ -65,6 +65,10 @@ function App() {
           fetch(`${API_BASE_URL}/stores/${storeId}/anomalies`)
         ]);
 
+        if (!healthRes.ok || !metricsRes.ok || !funnelRes.ok || !heatmapRes.ok || !anomaliesRes.ok) {
+          throw new Error(`API error: health=${healthRes.status}, metrics=${metricsRes.status}, funnel=${funnelRes.status}`);
+        }
+
         const [hData, mData, fData, hmapData, aData] = await Promise.all([
           healthRes.json(), metricsRes.json(), funnelRes.json(),
           heatmapRes.json(), anomaliesRes.json()

@@ -22,7 +22,12 @@ async def compute_store_funnel(session: AsyncSession, store_id: str) -> List[Dic
     # Track which stage each visitor reached
     visitor_stages = {vid: {"entry": True, "zone_visit": False, "billing": False, "purchase": False} for vid in unique_visitors}
     
+    # Sort transactions by timestamp for binary search
+    transactions.sort(key=lambda tx: tx.timestamp)
+    tx_timestamps = [tx.timestamp for tx in transactions]
+    
     # Process events to check stages
+    import bisect
     for ev in events:
         vid = ev.visitor_id
         # Stage 1: Zone Visit (any non-ENTRY/EXIT and non-BILLING zone)
@@ -34,11 +39,12 @@ async def compute_store_funnel(session: AsyncSession, store_id: str) -> List[Dic
             visitor_stages[vid]["billing"] = True
             
             # Stage 3: Purchase (matched POS transaction)
-            for tx in transactions:
-                time_diff = tx.timestamp - ev.timestamp
-                if timedelta(seconds=0) <= time_diff <= timedelta(minutes=5):
-                    visitor_stages[vid]["purchase"] = True
-                    break
+            if not visitor_stages[vid]["purchase"] and tx_timestamps:
+                idx = bisect.bisect_left(tx_timestamps, ev.timestamp)
+                if idx < len(transactions):
+                    tx = transactions[idx]
+                    if tx.timestamp <= ev.timestamp + timedelta(minutes=5):
+                        visitor_stages[vid]["purchase"] = True
 
     # Aggregate counts
     entry_count = len(unique_visitors)

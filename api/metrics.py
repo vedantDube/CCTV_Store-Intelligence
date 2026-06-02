@@ -50,25 +50,23 @@ async def compute_store_metrics(session: AsyncSession, store_id: str) -> Dict[st
     # Conversion Rate calculation
     # "A visitor who was in the billing zone in the 5-minute window before a transaction timestamp
     #  counts as a converted visitor for that session."
-    # Optimised: sort transactions by time, then for each billing event check via sorted lookup
     converted_visitors = set()
     billing_events = [ev for ev in events if ev.zone_id == "BILLING"]
     
     # Sort transactions for efficient matching
     sorted_transactions = sorted(transactions, key=lambda tx: tx.timestamp)
+    tx_timestamps = [tx.timestamp for tx in sorted_transactions]
     
+    import bisect
     for ev in billing_events:
-        ev_time = ev.timestamp
-        for tx in sorted_transactions:
-            time_diff = tx.timestamp - ev_time
-            total_seconds = time_diff.total_seconds()
-            # Transaction must be within [0, 300] seconds after the billing event
-            if total_seconds < 0:
-                continue
-            if total_seconds > 300:
-                break  # sorted, so all further transactions are also too far
-            converted_visitors.add(ev.visitor_id)
-            break
+        if ev.visitor_id in converted_visitors:
+            continue
+        if tx_timestamps:
+            idx = bisect.bisect_left(tx_timestamps, ev.timestamp)
+            if idx < len(sorted_transactions):
+                tx = sorted_transactions[idx]
+                if tx.timestamp <= ev.timestamp + timedelta(minutes=5):
+                    converted_visitors.add(ev.visitor_id)
                 
     conversion_rate = (len(converted_visitors) / unique_visitors) if unique_visitors > 0 else 0.0
     
