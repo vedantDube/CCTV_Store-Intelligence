@@ -21,8 +21,10 @@ class TestDetectionTracking(unittest.TestCase):
         # Ensure models exist
         assert os.path.isfile('models/yolov8m.pt'), "YOLOv8 model not found"
         assert os.path.isfile('models/osnet_x0_25_market1501.pt'), "OSNet model not found"
-        cls.detector = YOLOv8Detector(weights_path='models/yolov8m.pt', device='cuda')
-        cls.tracker = DeepSORTTracker(reid_weights='models/osnet_x0_25_market1501.pt', device='cuda')
+        import torch
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        cls.detector = YOLOv8Detector(weights_path='models/yolov8m.pt', device=device)
+        cls.tracker = DeepSORTTracker(reid_weights='models/osnet_x0_25_market1501.pt', device=device)
         # Create a simple dummy image (RGB) with a single white square
         img = np.zeros((640, 640, 3), dtype=np.uint8)
         cv2.rectangle(img, (200, 200), (400, 400), (255, 255, 255), -1)

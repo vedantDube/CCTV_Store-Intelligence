@@ -73,42 +73,85 @@ class DBTransaction(SQLModel, table=True):
 
 # Helper to load transactions from local CSV into database
 async def load_pos_transactions():
-    csv_path = "Brigade_Bangalore_10_April_26 (1)bc6219c.csv"
-    if not os.path.exists(csv_path):
-        print(f"[DB INIT] Warning: {csv_path} not found. Skipping POS transaction import.")
+    import glob
+    csv_files = glob.glob("*.csv")
+    if not csv_files:
+        print("[DB INIT] No CSV files found. Skipping POS transaction import.")
         return
 
-    print(f"[DB INIT] Loading transactions from {csv_path}...")
-    
-    # Read transactions in a sync block and insert them
     transactions_to_insert = []
     seen_ids = set()
-    
-    with open(csv_path, mode='r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            txn_id = row.get("order_id")
-            if not txn_id or txn_id in seen_ids:
-                continue
+
+    for csv_path in csv_files:
+        if not os.path.exists(csv_path):
+            continue
+
+        try:
+            with open(csv_path, mode='r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                headers = reader.fieldnames if reader.fieldnames else []
                 
-            try:
-                date_str = row.get("order_date")
-                time_str = row.get("order_time")
-                dt = datetime.strptime(f"{date_str} {time_str}", "%d-%m-%Y %H:%M:%S")
+                # Check if this is a transaction CSV by looking for common ID/amount fields
+                id_col = None
+                for col in ["order_id", "transaction_id"]:
+                    if col in headers:
+                        id_col = col
+                        break
                 
-                basket_val = float(row.get("total_amount", 0))
-                store_id = row.get("store_id", "ST1008")
+                if not id_col:
+                    continue
                 
-                seen_ids.add(txn_id)
-                transactions_to_insert.append(DBTransaction(
-                    transaction_id=txn_id,
-                    store_id=store_id,
-                    timestamp=dt,
-                    basket_value_inr=basket_val
-                ))
-            except Exception as e:
-                # Log parsing errors
-                pass
+                amount_col = None
+                for col in ["total_amount", "basket_value_inr"]:
+                    if col in headers:
+                        amount_col = col
+                        break
+                
+                if not amount_col:
+                    continue
+
+                print(f"[DB INIT] Loading transactions from {csv_path} using id='{id_col}', amount='{amount_col}'...")
+                
+                for row in reader:
+                    txn_id = row.get(id_col)
+                    if not txn_id or txn_id in seen_ids:
+                        continue
+                    
+                    try:
+                        # Parse timestamp
+                        dt = None
+                        if "timestamp" in row and row["timestamp"]:
+                            ts_str = row["timestamp"]
+                            for fmt in ["%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%d %H:%M:%S"]:
+                                try:
+                                    dt = datetime.strptime(ts_str, fmt)
+                                    break
+                                except ValueError:
+                                    pass
+                        
+                        if dt is None:
+                            date_str = row.get("order_date")
+                            time_str = row.get("order_time")
+                            if date_str and time_str:
+                                dt = datetime.strptime(f"{date_str} {time_str}", "%d-%m-%Y %H:%M:%S")
+
+                        if dt is None:
+                            continue
+
+                        basket_val = float(row.get(amount_col, 0))
+                        store_id = row.get("store_id", "ST1008")
+
+                        seen_ids.add(txn_id)
+                        transactions_to_insert.append(DBTransaction(
+                            transaction_id=txn_id,
+                            store_id=store_id,
+                            timestamp=dt,
+                            basket_value_inr=basket_val
+                        ))
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[DB INIT] Error reading {csv_path}: {e}")
 
     if transactions_to_insert:
         async with AsyncSession(active_engine) as session:

@@ -47,8 +47,9 @@ class GlobalVisitor:
             return None
         return np.mean(self.features, axis=0)
 
-def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/ingest", layout_type: str = "Revised"):
-    video_dir = "CCTV Footage-20260529T160731Z-3-00144614ea/CCTV Footage"
+def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/ingest", layout_type: str = "Revised", video_dir: str = None, store_id: str = "ST1008"):
+    if not video_dir:
+        video_dir = "CCTV Footage-20260529T160731Z-3-00144614ea/CCTV Footage"
     cameras = {
         "CAM 1": "ENTRY",
         "CAM 2": "FOH",
@@ -68,7 +69,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
         "Current": ["BACKLIT", "Maybelline", "Faces", "Lakme", "Swiss+", "Mars+/Nybae", "Alps", "Lo'real", "Beauty Essential"]
     }[layout_type]
 
-    print(f"[RUNNER] Starting video detection pipeline with {layout_type} store layout...")
+    print(f"[RUNNER] Starting video detection pipeline with {layout_type} store layout for {store_id}...")
     
     # Initialize YOLOv8 and DeepSORT Tracker
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -78,18 +79,47 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
     # Open video capture streams
     caps = {}
     total_frames = 0
+    
+    # List all mp4 files in video_dir
+    mp4_files = []
+    if os.path.exists(video_dir):
+        mp4_files = [f for f in os.listdir(video_dir) if f.endswith(".mp4")]
+        
+    # Map camera IDs to actual files
+    cam_to_file = {}
     for cam_id in cameras:
+        # Try exact match (e.g. "CAM 1.mp4")
         v_path = os.path.join(video_dir, f"{cam_id}.mp4")
         if os.path.exists(v_path):
-            cap = cv2.VideoCapture(v_path)
-            caps[cam_id] = cap
-            length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            total_frames = max(total_frames, length)
+            cam_to_file[cam_id] = v_path
         else:
-            print(f"[RUNNER] Warning: Video file not found: {v_path}")
+            # Try fuzzy match (e.g. "CAM 1 - zone.mp4" or "CAM 1-zone.mp4")
+            for f in mp4_files:
+                if f.upper().startswith(cam_id.upper()):
+                    cam_to_file[cam_id] = os.path.join(video_dir, f)
+                    break
+
+    # If no standard camera naming exists (e.g., Store 2), map them dynamically
+    if not cam_to_file and mp4_files:
+        print("[RUNNER] Custom folder detected (e.g. Store 2). Mapping cameras based on names...")
+        for f in mp4_files:
+            f_lower = f.lower()
+            if "entry" in f_lower or "threshold" in f_lower:
+                cam_to_file["CAM 1"] = os.path.join(video_dir, f)
+            elif "billing" in f_lower or "cash" in f_lower or "queue" in f_lower:
+                cam_to_file["CAM 5"] = os.path.join(video_dir, f)
+            elif "zone" in f_lower or "main" in f_lower:
+                cam_to_file["CAM 2"] = os.path.join(video_dir, f)
+
+    for cam_id, v_path in cam_to_file.items():
+        cap = cv2.VideoCapture(v_path)
+        caps[cam_id] = cap
+        length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        total_frames = max(total_frames, length)
+        print(f"[RUNNER] Loaded {cam_id} from {v_path} ({length} frames)")
 
     if not caps:
-        print("[RUNNER] Error: No video files loaded. Exiting.")
+        print(f"[RUNNER] Error: No video files loaded from {video_dir}. Exiting.")
         return
 
     # Base start time (April 10, 2026 18:00:00 PM UTC)
@@ -214,7 +244,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
                             event_type = "REENTRY" if gv.has_exited else "ENTRY"
                             events_log.append({
                                 "event_id": str(uuid.uuid4()),
-                                "store_id": "ST1008",
+                                "store_id": store_id,
                                 "camera_id": cam_id,
                                 "visitor_id": gv.visitor_id,
                                 "event_type": event_type,
@@ -237,7 +267,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
                     # Emit ZONE_ENTER
                     events_log.append({
                         "event_id": str(uuid.uuid4()),
-                        "store_id": "ST1008",
+                        "store_id": store_id,
                         "camera_id": cam_id,
                         "visitor_id": gv.visitor_id,
                         "event_type": "ZONE_ENTER",
@@ -263,7 +293,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
                         gv.active_zones[cam_id][2] = current_time # update last dwell emit
                         events_log.append({
                             "event_id": str(uuid.uuid4()),
-                            "store_id": "ST1008",
+                            "store_id": store_id,
                             "camera_id": cam_id,
                             "visitor_id": gv.visitor_id,
                             "event_type": "ZONE_DWELL",
@@ -289,7 +319,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
                         q_depth = len(billing_visitors) - 1
                         events_log.append({
                             "event_id": str(uuid.uuid4()),
-                            "store_id": "ST1008",
+                            "store_id": store_id,
                             "camera_id": "CAM 5",
                             "visitor_id": gv.visitor_id,
                             "event_type": "BILLING_QUEUE_JOIN",
@@ -315,7 +345,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
                     # We ensure dwell_ms is at least 15000 if we actually held them
                     events_log.append({
                         "event_id": str(uuid.uuid4()),
-                        "store_id": "ST1008",
+                        "store_id": store_id,
                         "camera_id": active_cam,
                         "visitor_id": gv.visitor_id,
                         "event_type": "ZONE_EXIT",
@@ -342,7 +372,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
                         if had_queue_join:
                             events_log.append({
                                 "event_id": str(uuid.uuid4()),
-                                "store_id": "ST1008",
+                                "store_id": store_id,
                                 "camera_id": active_cam,
                                 "visitor_id": gv.visitor_id,
                                 "event_type": "BILLING_QUEUE_ABANDON",
@@ -364,7 +394,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
                     if not gv.active_zones:
                         events_log.append({
                             "event_id": str(uuid.uuid4()),
-                            "store_id": "ST1008",
+                            "store_id": store_id,
                             "camera_id": "CAM 1",
                             "visitor_id": gv.visitor_id,
                             "event_type": "EXIT",
@@ -391,7 +421,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
             dwell_ms = int((last_seen - enter_time).total_seconds() * 1000)
             events_log.append({
                 "event_id": str(uuid.uuid4()),
-                "store_id": "ST1008",
+                "store_id": store_id,
                 "camera_id": active_cam,
                 "visitor_id": gv.visitor_id,
                 "event_type": "ZONE_EXIT",
@@ -408,7 +438,7 @@ def main(frame_step: int = 15, api_url: str = "http://localhost:8000/events/inge
             })
             events_log.append({
                 "event_id": str(uuid.uuid4()),
-                "store_id": "ST1008",
+                "store_id": store_id,
                 "camera_id": "CAM 1",
                 "visitor_id": gv.visitor_id,
                 "event_type": "EXIT",
@@ -433,5 +463,7 @@ if __name__ == "__main__":
     parser.add_argument("--step", type=int, default=15, help="Frame step size for subsampling")
     parser.add_argument("--url", type=str, default="http://localhost:8000/events/ingest", help="API Ingestion endpoint")
     parser.add_argument("--layout", type=str, default="Revised", choices=["Revised", "Current"], help="Store brand layout style")
+    parser.add_argument("--video-dir", type=str, default=None, help="Directory containing CCTV video clips")
+    parser.add_argument("--store-id", type=str, default="ST1008", help="Store identifier")
     args = parser.parse_args()
-    main(frame_step=args.step, api_url=args.url, layout_type=args.layout)
+    main(frame_step=args.step, api_url=args.url, layout_type=args.layout, video_dir=args.video_dir, store_id=args.store_id)
